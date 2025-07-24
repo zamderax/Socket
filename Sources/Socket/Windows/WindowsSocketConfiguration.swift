@@ -24,6 +24,9 @@ public struct WindowsSocketConfiguration: Sendable {
     /// Whether to fall back to AsyncSocketManager if IOCP fails
     public var fallbackOnError: Bool
     
+    /// Custom manager instance (for testing)
+    internal var customManager: IOCPSocketManager?
+    
     public init(
         log: (@Sendable (String) -> ())? = nil,
         workerThreadCount: Int = 0,
@@ -32,6 +35,15 @@ public struct WindowsSocketConfiguration: Sendable {
         self.log = log
         self.workerThreadCount = workerThreadCount
         self.fallbackOnError = fallbackOnError
+        self.customManager = nil
+    }
+    
+    /// Initialize with a custom IOCP manager (for testing)
+    internal init(manager: IOCPSocketManager) {
+        self.log = nil
+        self.workerThreadCount = 0
+        self.fallbackOnError = false
+        self.customManager = manager
     }
 }
 
@@ -130,6 +142,9 @@ extension WindowsSocketConfiguration: SocketManagerConfiguration {
     /// Current logger instance
     nonisolated(unsafe) fileprivate static var currentLogger: (@Sendable (String) -> ())? = nil
     
+    /// Thread-local storage for custom managers
+    nonisolated(unsafe) private static var customManagers: [ObjectIdentifier: AnySocketManager] = [:]
+    
     /// Shared IOCP manager instance
     private static let sharedManager: AnySocketManager = {
         do {
@@ -142,7 +157,22 @@ extension WindowsSocketConfiguration: SocketManagerConfiguration {
         }
     }()
     
-    public static nonisolated var manager: some SocketManager {
+    public nonisolated var manager: some SocketManager {
+        // Check if we have a custom manager for this configuration
+        if let customManager = customManager {
+            let id = ObjectIdentifier(customManager)
+            if let existing = Self.customManagers[id] {
+                return existing
+            } else {
+                let wrapped = AnySocketManager(customManager)
+                Self.customManagers[id] = wrapped
+                return wrapped
+            }
+        }
+        return Self.sharedManager
+    }
+    
+    public static var manager: some SocketManager {
         return sharedManager
     }
     

@@ -67,6 +67,8 @@ public actor IOCPSocketManager: SocketManager {
         case write = 1
         case accept = 2
         case connect = 3
+        case sendTo = 4
+        case recvFrom = 5
     }
     
     /// Per-socket registration data
@@ -75,6 +77,18 @@ public actor IOCPSocketManager: SocketManager {
         var readContinuation: AsyncStream<Socket.Event>.Continuation?
         var writeContinuation: AsyncStream<Socket.Event>.Continuation?
         var pendingOperations: Set<OperationType> = []
+        
+        // Accept operation continuations
+        var acceptContinuation: CheckedContinuation<SocketDescriptor, Error>?
+        var acceptAddressContinuation: CheckedContinuation<(SocketDescriptor, any SocketAddress), Error>?
+        
+        // Connect operation continuation
+        var connectContinuation: CheckedContinuation<Void, Error>?
+        
+        // UDP operation continuations
+        var sendToContinuation: CheckedContinuation<Int, Error>?
+        var recvFromContinuation: CheckedContinuation<(Data, any SocketAddress), Error>?
+        var recvFromAddressType: Any.Type?
     }
     
     /// IOCP per-I/O data structure
@@ -85,6 +99,15 @@ public actor IOCPSocketManager: SocketManager {
         var buffer: UnsafeMutablePointer<UInt8>?
         var bufferSize: Int = 0
         
+        // Accept-specific data
+        var acceptSocket: SocketDescriptor?
+        var acceptAddressType: Any.Type?
+        
+        // UDP operation data
+        var udpAddress: (any SocketAddress)?
+        var udpAddressBuffer: UnsafeMutableRawPointer?
+        var udpAddressLength: UInt32 = 0
+        
         init(operation: OperationType, socket: SocketDescriptor) {
             self.operation = operation
             self.socket = socket
@@ -92,6 +115,7 @@ public actor IOCPSocketManager: SocketManager {
         
         deinit {
             buffer?.deallocate()
+            udpAddressBuffer?.deallocate()
         }
     }
     
@@ -347,11 +371,100 @@ public actor IOCPSocketManager: SocketManager {
             
         case .accept:
             // Accept completion - connection accepted
+            if let acceptContinuation = registration.acceptContinuation {
+                // Complete the accept operation
+                if bytesTransferred >= 0, let acceptSocket = ioData.acceptSocket {
+                    // Update SO_UPDATE_ACCEPT_CONTEXT (Windows-specific)
+                    // This allows the accepted socket to inherit properties from the listening socket
+                    #if os(Windows)
+                    var listenSocket = completionKey.rawValue
+                    let result = setsockopt(
+                        acceptSocket.rawValue,
+                        SOL_SOCKET,
+                        SO_UPDATE_ACCEPT_CONTEXT,
+                        &listenSocket,
+                        CInt(MemoryLayout<SOCKET>.size)
+                    )
+                    if result == 0 {
+                        acceptContinuation.resume(returning: acceptSocket)
+                    } else {
+                        acceptContinuation.resume(throwing: Errno.windowsCurrent)
+                    }
+                    #else
+                    acceptContinuation.resume(returning: acceptSocket)
+                    #endif
+                } else {
+                    acceptContinuation.resume(throwing: Errno.connectionReset)
+                }
+                registration.acceptContinuation = nil
+                sockets[completionKey] = registration
+                return // Don't send event for accept completions
+            }
             event = .connection
             
         case .connect:
             // Connect completion - connection established
+            if let connectContinuation = registration.connectContinuation {
+                // Complete the connect operation
+                if bytesTransferred >= 0 {
+                    connectContinuation.resume()
+                } else {
+                    connectContinuation.resume(throwing: Errno.connectionRefused)
+                }
+                registration.connectContinuation = nil
+                sockets[completionKey] = registration
+                return // Don't send event for connect completions
+            }
             event = .connection
+            
+        case .sendTo:
+            // SendTo completion
+            if let sendToContinuation = registration.sendToContinuation {
+                if bytesTransferred > 0 {
+                    sendToContinuation.resume(returning: bytesTransferred)
+                } else {
+                    sendToContinuation.resume(throwing: Errno.noBufferSpace)
+                }
+                registration.sendToContinuation = nil
+                sockets[completionKey] = registration
+                return // Don't send event for sendTo completions
+            }
+            event = .didWrite(bytesTransferred)
+            
+        case .recvFrom:
+            // RecvFrom completion
+            if let recvFromContinuation = registration.recvFromContinuation {
+                if bytesTransferred > 0, let addressBuffer = ioData.udpAddressBuffer {
+                    // Parse the address based on family
+                    let sockaddrPtr = addressBuffer.assumingMemoryBound(to: sockaddr.self)
+                    let family = Int32(sockaddrPtr.pointee.sa_family)
+                    
+                    let address: any SocketAddress
+                    switch family {
+                    case AF_INET:
+                        let sockaddr_in = addressBuffer.assumingMemoryBound(to: CInterop.IPv4SocketAddress.self)
+                        address = IPv4SocketAddress(sockaddr_in.pointee)
+                    case AF_INET6:
+                        let sockaddr_in6 = addressBuffer.assumingMemoryBound(to: CInterop.IPv6SocketAddress.self)
+                        address = IPv6SocketAddress(sockaddr_in6.pointee)
+                    default:
+                        recvFromContinuation.resume(throwing: Errno.addressFamilyNotSupported)
+                        registration.recvFromContinuation = nil
+                        sockets[completionKey] = registration
+                        return
+                    }
+                    
+                    // Create data from buffer
+                    let data = Data(bytes: ioData.buffer!, count: bytesTransferred)
+                    recvFromContinuation.resume(returning: (data, address))
+                } else {
+                    recvFromContinuation.resume(throwing: Errno.noBufferSpace)
+                }
+                registration.recvFromContinuation = nil
+                sockets[completionKey] = registration
+                return // Don't send event for recvFrom completions
+            }
+            event = .didRead(bytesTransferred)
         }
         
         // Send event
@@ -447,33 +560,88 @@ public actor IOCPSocketManager: SocketManager {
         return try await read(length, for: fileDescriptor)
     }
     
-    /// Receive message with address
+    /// Receive message with address using WSARecvFrom for true async operation
     public func receiveMessage<Address: SocketAddress>(
         _ length: Int,
         fromAddressOf addressType: Address.Type,
         for fileDescriptor: SocketDescriptor
     ) async throws -> (Data, Address) {
-        // For now, use synchronous recvfrom in a task
-        // Future: Implement true async recvfrom with IOCP (WSARecvFrom)
+        // First perform the async recvfrom operation returning generic address
+        let (data, genericAddress) = try await _receiveMessageGeneric(length, for: fileDescriptor)
+        
+        // Cast to specific address type
+        guard let typedAddress = genericAddress as? Address else {
+            throw Errno.addressFamilyNotSupported
+        }
+        
+        return (data, typedAddress)
+    }
+    
+    /// Internal generic receive implementation
+    private func _receiveMessageGeneric(
+        _ length: Int,
+        for fileDescriptor: SocketDescriptor
+    ) async throws -> (Data, any SocketAddress) {
         return try await withCheckedThrowingContinuation { continuation in
             Task {
-                do {
-                    let buffer = UnsafeMutableRawBufferPointer.allocate(
-                        byteCount: length,
-                        alignment: MemoryLayout<UInt8>.alignment
-                    )
-                    defer { buffer.deallocate() }
-                    
-                    let (bytesReceived, address) = try fileDescriptor.receive(
-                        into: buffer,
-                        fromAddressOf: addressType
-                    )
-                    
-                    let data = Data(bytes: buffer.baseAddress!, count: bytesReceived)
-                    continuation.resume(returning: (data, address))
-                } catch {
-                    continuation.resume(throwing: error)
+                guard var registration = self.sockets[fileDescriptor] else {
+                    continuation.resume(throwing: Errno.badFileDescriptor)
+                    return
                 }
+                
+                // Create IOCP data for this operation
+                let ioData = IOData(operation: .recvFrom, socket: fileDescriptor)
+                ioData.buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: length)
+                ioData.bufferSize = length
+                
+                // Allocate space for the address
+                let addressSize = WindowsSocketExtensions.maxAddressSize()
+                ioData.udpAddressBuffer = UnsafeMutableRawPointer.allocate(
+                    byteCount: addressSize,
+                    alignment: MemoryLayout<sockaddr>.alignment
+                )
+                ioData.udpAddressLength = UInt32(addressSize)
+                
+                // Store continuation
+                registration.recvFromContinuation = continuation
+                self.sockets[fileDescriptor] = registration
+                
+                // Create WSABUF
+                var wsaBuf = WSABUF()
+                wsaBuf.len = ULONG(length)
+                wsaBuf.buf = ioData.buffer!.withMemoryRebound(to: CChar.self, capacity: length) { $0 }
+                
+                var flags: DWORD = 0
+                var bytesReceived: DWORD = 0
+                
+                // Submit the receive operation
+                let result = withUnsafeMutablePointer(to: &ioData.overlapped) { overlappedPtr in
+                    WSARecvFrom(
+                        fileDescriptor.rawValue,
+                        &wsaBuf,
+                        1,
+                        &bytesReceived,
+                        &flags,
+                        ioData.udpAddressBuffer!.assumingMemoryBound(to: sockaddr.self),
+                        &ioData.udpAddressLength,
+                        overlappedPtr,
+                        nil
+                    )
+                }
+                
+                if result == SOCKET_ERROR {
+                    let error = WSAGetLastError()
+                    if error != WSA_IO_PENDING {
+                        registration.recvFromContinuation = nil
+                        self.sockets[fileDescriptor] = registration
+                        continuation.resume(throwing: Errno(rawValue: error))
+                        return
+                    }
+                    // If WSA_IO_PENDING, the operation will complete asynchronously
+                }
+                
+                // Keep IOData alive
+                _ = Unmanaged.passRetained(ioData)
             }
         }
     }
@@ -484,48 +652,142 @@ public actor IOCPSocketManager: SocketManager {
         return try await write(data, for: fileDescriptor)
     }
     
-    /// Send message to address
+    /// Send message to address using WSASendTo for true async operation
     public func sendMessage<Address: SocketAddress>(
         _ data: Data,
         to address: Address,
         for fileDescriptor: SocketDescriptor
     ) async throws -> Int {
-        // For now, use synchronous sendto in a task
-        // Future: Implement true async sendto with IOCP (WSASendTo)
         return try await withCheckedThrowingContinuation { continuation in
             Task {
-                do {
-                    let bytesSent = try data.withUnsafeBytes { buffer in
-                        try fileDescriptor.send(
-                            buffer,
-                            to: address
+                guard var registration = self.sockets[fileDescriptor] else {
+                    continuation.resume(throwing: Errno.badFileDescriptor)
+                    return
+                }
+                
+                // Create IOCP data for this operation
+                let ioData = IOData(operation: .sendTo, socket: fileDescriptor)
+                ioData.udpAddress = address
+                
+                // Create WSABUF
+                var wsaBuf = WSABUF()
+                wsaBuf.len = ULONG(data.count)
+                
+                // Keep data alive during the operation
+                let dataHolder = data
+                dataHolder.withUnsafeBytes { bytes in
+                    wsaBuf.buf = UnsafeMutablePointer(mutating: bytes.baseAddress!.assumingMemoryBound(to: CChar.self))
+                }
+                
+                // Store continuation
+                registration.sendToContinuation = continuation
+                self.sockets[fileDescriptor] = registration
+                
+                var bytesSent: DWORD = 0
+                
+                // Submit the send operation
+                let result = address.withUnsafePointer { addressPtr, addressLen in
+                    withUnsafeMutablePointer(to: &ioData.overlapped) { overlappedPtr in
+                        WSASendTo(
+                            fileDescriptor.rawValue,
+                            &wsaBuf,
+                            1,
+                            &bytesSent,
+                            0,
+                            addressPtr,
+                            Int32(addressLen),
+                            overlappedPtr,
+                            nil
                         )
                     }
-                    continuation.resume(returning: bytesSent)
-                } catch {
-                    continuation.resume(throwing: error)
                 }
+                
+                if result == SOCKET_ERROR {
+                    let error = WSAGetLastError()
+                    if error != WSA_IO_PENDING {
+                        registration.sendToContinuation = nil
+                        self.sockets[fileDescriptor] = registration
+                        continuation.resume(throwing: Errno(rawValue: error))
+                        return
+                    }
+                    // If WSA_IO_PENDING, the operation will complete asynchronously
+                }
+                
+                // Keep IOData and data alive
+                _ = Unmanaged.passRetained(ioData)
+                withExtendedLifetime(dataHolder) {}
             }
         }
     }
     
-    /// Accept new socket
+    /// Accept new socket using AcceptEx for true async operation
     public func accept(for fileDescriptor: SocketDescriptor) async throws -> SocketDescriptor {
-        // For now, use synchronous accept in a task
-        // Future: Implement true async AcceptEx with IOCP
-        return try await withCheckedThrowingContinuation { continuation in
-            Task {
-                do {
-                    let (newSocket, _) = try WindowsSocket.accept(fileDescriptor)
+        // Create accept socket
+        let acceptSocket = try WindowsSocket.socket(AF_INET, SOCK_STREAM, 0)
+        
+        do {
+            // Register the accept socket with IOCP
+            try await register(acceptSocket)
+            
+            // Load AcceptEx function
+            let acceptEx = try await WindowsSocketExtensions.shared.getAcceptEx(socket: fileDescriptor.rawValue)
+            
+            // Set up continuation
+            return try await withCheckedThrowingContinuation { continuation in
+                Task {
+                    guard var registration = self.sockets[fileDescriptor] else {
+                        continuation.resume(throwing: Errno.badFileDescriptor)
+                        return
+                    }
                     
-                    // Register the new socket with IOCP
-                    try await self.register(newSocket)
+                    // Allocate buffer for AcceptEx inside the Task
+                    let bufferSize = WindowsSocketExtensions.acceptExBufferSize(addressFamily: .ipv4)
+                    let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
                     
-                    continuation.resume(returning: newSocket)
-                } catch {
-                    continuation.resume(throwing: error)
+                    // Create IOData for this operation
+                    let ioData = IOData(operation: .accept, socket: fileDescriptor)
+                    ioData.buffer = buffer
+                    ioData.bufferSize = bufferSize
+                    ioData.acceptSocket = acceptSocket
+                    
+                    registration.acceptContinuation = continuation
+                    self.sockets[fileDescriptor] = registration
+                    
+                    // Prepare overlapped structure
+                    let overlappedPtr = withUnsafeMutablePointer(to: &ioData.overlapped) { $0 }
+                    
+                    // Call AcceptEx
+                    var bytesReceived: DWORD = 0
+                    let result = acceptEx(
+                        fileDescriptor.rawValue,
+                        acceptSocket.rawValue,
+                        buffer,
+                        0, // No initial data
+                        DWORD(MemoryLayout<sockaddr_in>.size + 16),
+                        DWORD(MemoryLayout<sockaddr_in>.size + 16),
+                        &bytesReceived,
+                        overlappedPtr
+                    )
+                    
+                    if result == false {
+                        let error = GetLastError()
+                        if error != ERROR_IO_PENDING {
+                            registration.acceptContinuation = nil
+                            self.sockets[fileDescriptor] = registration
+                            continuation.resume(throwing: Errno(rawValue: CInt(error)))
+                        }
+                            // If ERROR_IO_PENDING, the operation will complete asynchronously
+                        // Keep IOData alive
+                        _ = Unmanaged.passRetained(ioData)
+                    } else {
+                        // Immediate success - keep IOData alive
+                        _ = Unmanaged.passRetained(ioData)
+                    }
                 }
             }
+        } catch {
+            try? acceptSocket.close()
+            throw error
         }
     }
     
@@ -557,23 +819,83 @@ public actor IOCPSocketManager: SocketManager {
         }
     }
     
-    /// Initiate a connection
+    /// Initiate a connection using ConnectEx for true async operation
     public func connect<Address: SocketAddress>(
         to address: Address,
         for fileDescriptor: SocketDescriptor
     ) async throws {
-        // For now, use synchronous connect in a task
-        // Future: Implement true async ConnectEx with IOCP
-        try await withCheckedThrowingContinuation { continuation in
-            Task {
-                do {
-                    try WindowsSocket.connect(fileDescriptor, address)
-                    continuation.resume()
-                } catch {
-                    continuation.resume(throwing: error)
-                }
+        // Bind the socket to any local address (required for ConnectEx)
+        // Check if already bound
+        if (try? fileDescriptor.address(type(of: address).self)) == nil {
+            // Not bound, bind to any address
+            if address is IPv4SocketAddress {
+                try fileDescriptor.bind(IPv4SocketAddress(address: .any, port: 0))
+            } else if address is IPv6SocketAddress {
+                try fileDescriptor.bind(IPv6SocketAddress(address: .any, port: 0))
             }
         }
+        
+        // Load ConnectEx function
+        let connectEx = try await WindowsSocketExtensions.shared.getConnectEx(socket: fileDescriptor.rawValue)
+        
+        // Create IOData for this operation
+        let ioData = IOData(operation: .connect, socket: fileDescriptor)
+        
+        // Set up continuation
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            Task {
+                guard var registration = self.sockets[fileDescriptor] else {
+                    continuation.resume(throwing: Errno.badFileDescriptor)
+                    return
+                }
+                
+                registration.connectContinuation = continuation
+                self.sockets[fileDescriptor] = registration
+                
+                // Prepare overlapped structure
+                let overlappedPtr = withUnsafeMutablePointer(to: &ioData.overlapped) { $0 }
+                
+                // Call ConnectEx
+                let result = address.withUnsafePointer { addressPtr, addressLen in
+                    var bytesSent: DWORD = 0
+                    return connectEx(
+                        fileDescriptor.rawValue,
+                        addressPtr,
+                        CInt(addressLen),
+                        nil, // No initial data
+                        0,
+                        &bytesSent,
+                        overlappedPtr
+                    )
+                }
+                
+                if result == false {
+                    let error = GetLastError()
+                    if error != ERROR_IO_PENDING {
+                        registration.connectContinuation = nil
+                        self.sockets[fileDescriptor] = registration
+                        continuation.resume(throwing: Errno(rawValue: CInt(error)))
+                        return
+                    }
+                    // If ERROR_IO_PENDING, the operation will complete asynchronously
+                }
+                
+                // Keep IOData alive
+                _ = Unmanaged.passRetained(ioData)
+            }
+        }
+        
+        // Update SO_UPDATE_CONNECT_CONTEXT after successful connection
+        #if os(Windows)
+        var val: CInt = 1
+        _ = setsockopt(
+            fileDescriptor.rawValue,
+            SOL_SOCKET,
+            SO_UPDATE_CONNECT_CONTEXT,
+            &val,
+            CInt(MemoryLayout<CInt>.size)
+        )
+        #endif
     }
     
     /// Listen for incoming connections

@@ -110,6 +110,13 @@ internal var _SEEK_DATA: CInt { SEEK_DATA }
 #endif
 
 #if os(Windows)
+// Windows-specific socket options for AcceptEx/ConnectEx
+@_alwaysEmitIntoClient
+internal var SO_UPDATE_ACCEPT_CONTEXT: CInt { 0x700B }
+
+@_alwaysEmitIntoClient
+internal var SO_UPDATE_CONNECT_CONTEXT: CInt { 0x7010 }
+
 // Windows doesn't have these fcntl constants
 @_alwaysEmitIntoClient
 internal var _FD_CLOEXEC: CInt { 1 }
