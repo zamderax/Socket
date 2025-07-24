@@ -6,11 +6,11 @@ import Socket
 struct ManagerTest {
     @Test("Access AsyncSocketManager directly")
     func testAccessManager() async {
-        print("ManagerTest: Accessing AsyncSocketManager.shared")
+        // ManagerTest: Accessing AsyncSocketManager.shared
         
         // Try to access the shared manager directly
         let manager = await AsyncSocketManager.shared
-        print("ManagerTest: Manager accessed successfully")
+        // ManagerTest: Manager accessed successfully
         
         #expect(true)
     }

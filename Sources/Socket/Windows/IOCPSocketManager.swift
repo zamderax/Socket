@@ -39,7 +39,7 @@ import WinSDK
 ///
 /// - Note: This is an experimental implementation. Some features like
 ///   AcceptEx and ConnectEx are not yet fully implemented.
-@available(Windows 10.0, *)
+@available(Windows 10.0.22000, *)
 public actor IOCPSocketManager: SocketManager {
     
     /// The I/O Completion Port handle

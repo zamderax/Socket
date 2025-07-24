@@ -5,10 +5,10 @@ import Socket
 struct ImportTest {
     @Test("Import Socket module")
     func testImport() {
-        print("ImportTest: Socket module imported successfully")
+        // ImportTest: Socket module imported successfully
         // Check that we can access Socket types
         let _ = SocketDescriptor.invalid
-        print("ImportTest: SocketDescriptor.invalid accessed")
+        // ImportTest: SocketDescriptor.invalid accessed
         #expect(true)
     }
 }

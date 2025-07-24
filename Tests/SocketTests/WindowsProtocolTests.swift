@@ -20,7 +20,7 @@ struct WindowsProtocolTests {
     
     /// Test UDP socket creation and basic operations
     @Test("UDP Socket Basic Operations")
-    @available(Windows 10.0, *)
+    @available(Windows 10.0.22000, *)
     func testUDPBasicOperations() async throws {
         // Create UDP socket
         let socket = try await Socket(IPv4Protocol.udp)
@@ -37,7 +37,7 @@ struct WindowsProtocolTests {
     
     /// Test UDP send and receive
     @Test("UDP Send/Receive")
-    @available(Windows 10.0, *)
+    @available(Windows 10.0.22000, *)
     func testUDPSendReceive() async throws {
         // Create server socket
         let server = try await Socket(IPv4Protocol.udp)
@@ -66,7 +66,7 @@ struct WindowsProtocolTests {
     
     /// Test IPv6 socket creation
     @Test("IPv6 Socket Creation")
-    @available(Windows 10.0, *)
+    @available(Windows 10.0.22000, *)
     func testIPv6SocketCreation() async throws {
         // Create IPv6 TCP socket
         let tcpSocket = try await Socket(IPv6Protocol.tcp)
@@ -83,7 +83,7 @@ struct WindowsProtocolTests {
     
     /// Test IPv6 address binding
     @Test("IPv6 Socket Bind")
-    @available(Windows 10.0, *)
+    @available(Windows 10.0.22000, *)
     func testIPv6Bind() async throws {
         let socket = try await Socket(IPv6Protocol.tcp)
         defer { Task { await socket.close() } }
@@ -99,7 +99,7 @@ struct WindowsProtocolTests {
     
     /// Test IPv6 TCP communication
     @Test("IPv6 TCP Echo")
-    @available(Windows 10.0, *)
+    @available(Windows 10.0.22000, *)
     func testIPv6TCPEcho() async throws {
         // Create server
         let server = try await Socket(IPv6Protocol.tcp)
@@ -137,7 +137,7 @@ struct WindowsProtocolTests {
     
     /// Test IPv6 UDP communication
     @Test("IPv6 UDP Datagram")
-    @available(Windows 10.0, *)
+    @available(Windows 10.0.22000, *)
     func testIPv6UDPDatagram() async throws {
         // Create server socket
         let server = try await Socket(IPv6Protocol.udp)
@@ -167,7 +167,7 @@ struct WindowsProtocolTests {
     
     /// Test socket option setting on Windows
     @Test("Windows Socket Options")
-    @available(Windows 10.0, *)
+    @available(Windows 10.0.22000, *)
     func testWindowsSocketOptions() async throws {
         // Test TCP_NODELAY
         let tcpSocket = try await Socket(IPv4Protocol.tcp)
@@ -191,7 +191,7 @@ struct WindowsProtocolTests {
     
     /// Test non-blocking socket operations
     @Test("Non-blocking Sockets")
-    @available(Windows 10.0, *)
+    @available(Windows 10.0.22000, *)
     func testNonBlockingSockets() async throws {
         let socket = try await Socket(IPv4Protocol.tcp)
         defer { Task { await socket.close() } }

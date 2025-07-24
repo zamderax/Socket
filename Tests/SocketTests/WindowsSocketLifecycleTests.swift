@@ -62,7 +62,7 @@ struct WindowsSocketLifecycleTests {
         } catch {
             // Binding might fail, but the error should be a valid socket error
             // not a WSAStartup failure
-            print("Bind failed (expected): \(error)")
+            // Bind failed (expected)
         }
         
         await socket.close()

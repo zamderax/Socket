@@ -67,7 +67,7 @@ struct WindowsIOCPTests {
     
     /// Test basic async socket operations
     @Test("Basic Async Socket")
-    @available(Windows 10.0, *)
+    @available(Windows 10.0.22000, *)
     func testBasicAsyncSocket() async throws {
         // Create async socket
         let socket = try await Socket(IPv4Protocol.tcp)
@@ -85,12 +85,12 @@ struct WindowsIOCPTests {
     
     /// Test Windows IOCP configuration
     @Test("Windows IOCP Configuration")
-    @available(Windows 10.0, *)
+    @available(Windows 10.0.22000, *)
     func testIOCPConfiguration() {
         // Test that we can create the Windows configuration
         let config = WindowsSocketConfiguration(
             log: { message in
-                print("[IOCP] \(message)")
+                // [IOCP] log message
             },
             workerThreadCount: 2
         )
@@ -101,7 +101,7 @@ struct WindowsIOCPTests {
     
     /// Test concurrent socket operations
     @Test("Concurrent Windows Sockets")
-    @available(Windows 10.0, *)
+    @available(Windows 10.0.22000, *)
     func testConcurrentSockets() async throws {
         // Create multiple sockets concurrently
         let sockets = await withTaskGroup(of: Socket?.self) { group in

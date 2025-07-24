@@ -12,7 +12,7 @@ import Foundation
 ///
 /// This configuration uses I/O Completion Ports (IOCP) for high-performance
 /// asynchronous I/O operations on Windows instead of the polling-based approach.
-@available(Windows 10.0, *)
+@available(Windows 10.0.22000, *)
 public struct WindowsSocketConfiguration: Sendable {
     
     /// Log handler for debugging
@@ -47,7 +47,7 @@ public struct WindowsSocketConfiguration: Sendable {
     }
 }
 
-@available(Windows 10.0, *)
+@available(Windows 10.0.22000, *)
 extension WindowsSocketConfiguration: SocketManagerConfiguration {
     
     /// Type-erased socket manager wrapper
@@ -186,7 +186,7 @@ extension WindowsSocketConfiguration: SocketManagerConfiguration {
 }
 
 /// Convenience extension to use Windows IOCP configuration
-@available(Windows 10.0, *)
+@available(Windows 10.0.22000, *)
 public extension Socket {
     
     /// Configure Socket to use Windows IOCP

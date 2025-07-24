@@ -16,7 +16,7 @@ struct IOCPManagerTests {
     
     @Test("Create IOCP Manager")
     func testCreateManager() async throws {
-        guard #available(Windows 10.0, *) else {
+        guard #available(Windows 10.0.22000, *) else {
             return // Skip test on older Windows
         }
         
@@ -30,7 +30,7 @@ struct IOCPManagerTests {
     
     @Test("IOCP Socket Direct Operations")
     func testIOCPDirectOperations() async throws {
-        guard #available(Windows 10.0, *) else {
+        guard #available(Windows 10.0.22000, *) else {
             return // Skip test on older Windows
         }
         
@@ -59,7 +59,7 @@ struct IOCPManagerTests {
     
     @Test("IOCP Accept and Connect")
     func testIOCPAcceptConnect() async throws {
-        guard #available(Windows 10.0, *) else {
+        guard #available(Windows 10.0.22000, *) else {
             return // Skip test on older Windows
         }
         
@@ -109,7 +109,7 @@ struct IOCPManagerTests {
     
     @Test("IOCP Read Write") 
     func testIOCPReadWrite() async throws {
-        guard #available(Windows 10.0, *) else {
+        guard #available(Windows 10.0.22000, *) else {
             return // Skip test on older Windows
         }
         
@@ -178,7 +178,7 @@ struct IOCPManagerTests {
     
     @Test("IOCP UDP SendTo RecvFrom")
     func testIOCPUDPSendRecv() async throws {
-        guard #available(Windows 10.0, *) else {
+        guard #available(Windows 10.0.22000, *) else {
             return // Skip test on older Windows
         }
         

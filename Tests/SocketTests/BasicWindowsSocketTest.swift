@@ -14,7 +14,7 @@ import SystemPackage
 func testBasicWindowsSocket() async throws {
     // Create a simple TCP socket
     let socket = try await Socket(IPv4Protocol.tcp)
-    print("Created socket: \(socket.fileDescriptor)")
+    // Created socket
     
     // Bind to any available port
     let address = IPv4SocketAddress(address: .any, port: 0)
@@ -22,11 +22,11 @@ func testBasicWindowsSocket() async throws {
     
     // Get the actual bound address
     let boundAddress = try socket.fileDescriptor.address(IPv4SocketAddress.self)
-    print("Bound to: \(boundAddress)")
+    // Bound to address
     
     // Close the socket
     await socket.close()
-    print("Socket closed successfully")
+    // Socket closed successfully
     
     #expect(true)
 }

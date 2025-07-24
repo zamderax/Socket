@@ -17,42 +17,42 @@ func testSimpleAsyncSocket() async throws {
     let port = UInt16.random(in: 8080 ..< .max)
     let address = IPv4SocketAddress(address: .any, port: port)
     
-    print("Binding server to port \(port)...")
+    // Binding server to port
     try server.fileDescriptor.bind(address)
     
-    print("Starting to listen...")
+    // Starting to listen...
     try await server.listen()
     
-    print("Server listening on port \(port)")
+    // Server listening on port
     
     // Create client socket
     let client = try await Socket(IPv4Protocol.tcp)
     
     // Connect in background
     let connectTask = Task {
-        print("Client connecting to port \(port)...")
+        // Client connecting to port
         try await client.connect(to: IPv4SocketAddress(address: .loopback, port: port))
-        print("Client connected!")
+        // Client connected!
     }
     
     // Accept connection
-    print("Server waiting for connection...")
+    // Server waiting for connection...
     let connection = try await server.accept()
-    print("Server accepted connection: \(connection.fileDescriptor)")
+    // Server accepted connection
     
     // Wait for client to finish connecting
     try await connectTask.value
     
     // Send data from client to server
     let testData = Data("Hello from client".utf8)
-    print("Client sending data...")
+    // Client sending data...
     let sent = try await client.write(testData)
-    print("Client sent \(sent) bytes")
+    // Client sent bytes
     
     // Receive data on server
-    print("Server reading data...")
+    // Server reading data...
     let received = try await connection.read(testData.count)
-    print("Server received: \(String(data: received, encoding: .utf8) ?? "?")")
+    // Server received data
     
     #expect(received == testData)
     
@@ -61,5 +61,5 @@ func testSimpleAsyncSocket() async throws {
     await client.close()
     await server.close()
     
-    print("Test completed successfully!")
+    // Test completed successfully!
 }
