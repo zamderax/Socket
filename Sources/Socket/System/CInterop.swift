@@ -5,6 +5,7 @@ import Darwin
 #elseif os(Windows)
 import CSocket
 import ucrt
+import WinSDK
 #elseif canImport(Glibc)
 import CSocket
 import Glibc
@@ -29,7 +30,11 @@ public extension CInterop {
   
     typealias PollFileDescriptor = pollfd
   
+    #if os(Windows)
+    typealias FileDescriptorCount = ULONG
+    #else
     typealias FileDescriptorCount = nfds_t
+    #endif
   
     typealias FileEvent = Int16
     
@@ -42,10 +47,32 @@ public extension CInterop {
     #endif
 
     /// The C `msghdr` type
-     typealias MessageHeader = msghdr
+    #if os(Windows)
+    // Windows doesn't have msghdr/iovec, we'll need to define compatible structures
+    struct iovec {
+        var iov_base: UnsafeMutableRawPointer?
+        var iov_len: size_t
+    }
+    
+    struct MessageHeader {
+        var msg_name: UnsafeMutableRawPointer?
+        var msg_namelen: socklen_t
+        var msg_iov: UnsafeMutablePointer<iovec>?
+        var msg_iovlen: size_t
+        var msg_control: UnsafeMutableRawPointer?
+        var msg_controllen: size_t
+        var msg_flags: CInt
+    }
+    #else
+    typealias MessageHeader = msghdr
+    #endif
   
     /// The C `sa_family_t` type
-     typealias SocketAddressFamily = sa_family_t
+    #if os(Windows)
+    typealias SocketAddressFamily = ADDRESS_FAMILY
+    #else
+    typealias SocketAddressFamily = sa_family_t
+    #endif
 
     /// Socket Type
     #if os(Linux)
@@ -86,10 +113,31 @@ public extension CInterop {
     #endif
     
     /// The C `if_nameindex` type
+    #if os(Windows)
+    // Windows doesn't have if_nameindex, define a compatible structure
+    struct InterfaceNameIndex {
+        var if_index: CUnsignedInt
+        var if_name: UnsafeMutablePointer<CChar>?
+    }
+    #else
     typealias InterfaceNameIndex = if_nameindex
+    #endif
     
     /// The C  `ifaddrs` type
+    #if os(Windows)
+    // Windows doesn't have ifaddrs, define a compatible structure
+    struct InterfaceLinkedList {
+        var ifa_next: UnsafeMutablePointer<InterfaceLinkedList>?
+        var ifa_name: UnsafeMutablePointer<CChar>?
+        var ifa_flags: CUnsignedInt
+        var ifa_addr: UnsafeMutablePointer<sockaddr>?
+        var ifa_netmask: UnsafeMutablePointer<sockaddr>?
+        var ifa_broadaddr: UnsafeMutablePointer<sockaddr>?
+        var ifa_data: UnsafeMutableRawPointer?
+    }
+    #else
     typealias InterfaceLinkedList = ifaddrs
+    #endif
     
     typealias IOControlID = CUnsignedLong
 }

@@ -4,6 +4,7 @@ import CSocket
 import Darwin
 #elseif os(Windows)
 import ucrt
+import WinSDK
 #elseif canImport(Glibc)
 import CSocket
 import Glibc
@@ -108,6 +109,29 @@ internal var _SEEK_HOLE: CInt { SEEK_HOLE }
 internal var _SEEK_DATA: CInt { SEEK_DATA }
 #endif
 
+#if os(Windows)
+// Windows doesn't have these fcntl constants
+@_alwaysEmitIntoClient
+internal var _FD_CLOEXEC: CInt { 1 }
+
+@_alwaysEmitIntoClient
+internal var _F_DUPFD: CInt { 0 }
+
+@_alwaysEmitIntoClient
+internal var _F_DUPFD_CLOEXEC: CInt { 1030 }
+
+@_alwaysEmitIntoClient
+internal var _F_GETFD: CInt { 1 }
+
+@_alwaysEmitIntoClient
+internal var _F_SETFD: CInt { 2 }
+
+@_alwaysEmitIntoClient
+internal var _F_GETFL: CInt { 3 }
+
+@_alwaysEmitIntoClient
+internal var _F_SETFL: CInt { 4 }
+#else
 @_alwaysEmitIntoClient
 internal var _FD_CLOEXEC: CInt { FD_CLOEXEC }
 
@@ -128,6 +152,7 @@ internal var _F_GETFL: CInt { F_GETFL }
 
 @_alwaysEmitIntoClient
 internal var _F_SETFL: CInt { F_SETFL }
+#endif
 
 @_alwaysEmitIntoClient
 internal var _POLLIN: CInt { POLLIN }
@@ -168,13 +193,29 @@ internal var _INET6_ADDRSTRLEN: CInt { INET6_ADDRSTRLEN }
 #if os(Android)
 @_alwaysEmitIntoClient
 internal var _INADDR_ANY: CInterop.IPv4Address { CInterop.IPv4Address(s_addr: 0x00000000) }
+#elseif os(Windows)
+@_alwaysEmitIntoClient
+internal var _INADDR_ANY: CInterop.IPv4Address { 
+    var addr = CInterop.IPv4Address()
+    addr.S_un.S_addr = 0x00000000
+    return addr
+}
 #else
 @_alwaysEmitIntoClient
 internal var _INADDR_ANY: CInterop.IPv4Address { CInterop.IPv4Address(s_addr: numericCast(INADDR_ANY)) }
 #endif
 
+#if os(Windows)
+@_alwaysEmitIntoClient
+internal var _INADDR_LOOPBACK: CInterop.IPv4Address { 
+    var addr = CInterop.IPv4Address()
+    addr.S_un.S_addr = UInt32(networkOrder: 0x7F000001)
+    return addr
+}
+#else
 @_alwaysEmitIntoClient
 internal var _INADDR_LOOPBACK: CInterop.IPv4Address { CInterop.IPv4Address(s_addr: UInt32(networkOrder: numericCast(INADDR_LOOPBACK))) }
+#endif
 
 @_alwaysEmitIntoClient
 internal var _INADDR6_ANY: CInterop.IPv6Address { in6addr_any }
@@ -313,12 +354,25 @@ internal var _AF_XDP: CInt { AF_XDP }
 
 #if os(Windows)
 @_alwaysEmitIntoClient
+internal var _AF_NETBIOS: CInt { AF_NETBIOS }
+
+@_alwaysEmitIntoClient
 internal var _AF_IRDA: CInt { AF_IRDA }
 
 @_alwaysEmitIntoClient
 internal var _AF_BTH: CInt { AF_BTH }
 #endif
 
+#if os(Windows)
+@_alwaysEmitIntoClient
+internal var _IPPROTO_RAW: CInt { CInt(IPPROTO_RAW.rawValue) }
+
+@_alwaysEmitIntoClient
+internal var _IPPROTO_TCP: CInt { CInt(IPPROTO_TCP.rawValue) }
+
+@_alwaysEmitIntoClient
+internal var _IPPROTO_UDP: CInt { CInt(IPPROTO_UDP.rawValue) }
+#else
 @_alwaysEmitIntoClient
 internal var _IPPROTO_RAW: CInt { numericCast(IPPROTO_RAW) }
 
@@ -327,6 +381,7 @@ internal var _IPPROTO_TCP: CInt { numericCast(IPPROTO_TCP) }
 
 @_alwaysEmitIntoClient
 internal var _IPPROTO_UDP: CInt { numericCast(IPPROTO_UDP) }
+#endif
 
 @_alwaysEmitIntoClient
 internal var _TCP_NODELAY: CInt { TCP_NODELAY }
@@ -404,8 +459,13 @@ internal var _SOCK_CLOEXEC: CInterop.SocketType { SOCK_CLOEXEC }
 @_alwaysEmitIntoClient
 internal var _MSG_DONTROUTE: CInt { numericCast(MSG_DONTROUTE) } /* send without using routing tables */
 
+#if os(Windows)
+@_alwaysEmitIntoClient
+internal var _MSG_EOR: CInt { 0 } /* not supported on Windows */
+#else
 @_alwaysEmitIntoClient
 internal var _MSG_EOR: CInt { numericCast(MSG_EOR) } /* data completes record */
+#endif
 
 @_alwaysEmitIntoClient
 internal var _MSG_OOB: CInt { numericCast(MSG_OOB) } /* process out-of-band data */
@@ -419,8 +479,13 @@ internal var _MSG_CTRUNC: CInt { numericCast(MSG_CTRUNC) } /* control data lost 
 @_alwaysEmitIntoClient
 internal var _MSG_WAITALL: CInt { numericCast(MSG_WAITALL) } /* wait for full request or error */
 
+#if os(Windows)
+@_alwaysEmitIntoClient
+internal var _MSG_DONTWAIT: CInt { 0 } /* not supported on Windows - use non-blocking sockets instead */
+#else
 @_alwaysEmitIntoClient
 internal var _MSG_DONTWAIT: CInt { numericCast(MSG_DONTWAIT) } /* this message should be nonblocking */
+#endif
 
 #if canImport(Darwin)
 @_alwaysEmitIntoClient

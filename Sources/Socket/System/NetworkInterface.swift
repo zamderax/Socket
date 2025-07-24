@@ -55,7 +55,7 @@ public extension NetworkInterface {
                     continue
                 }
                 #else
-                let sa_family = value.ifa_addr.pointee.sa_family
+                let sa_family = value.ifa_addr?.pointee.sa_family ?? 0
                 #endif
                 guard Address.family.rawValue == sa_family else {
                     continue // incompatible address type

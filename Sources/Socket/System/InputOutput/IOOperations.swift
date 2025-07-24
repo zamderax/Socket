@@ -18,7 +18,11 @@ extension SocketDescriptor {
         retryOnInterrupt: Bool
     ) -> Result<(), Errno> {
         nothingOrErrno(retryOnInterrupt: retryOnInterrupt) {
+            #if os(Windows)
+            system_ioctl(CInt(self.rawValue), request.rawValue)
+            #else
             system_ioctl(self.rawValue, request.rawValue)
+            #endif
         }
     }
     
@@ -38,7 +42,11 @@ extension SocketDescriptor {
         retryOnInterrupt: Bool
     ) -> Result<(), Errno> {
         nothingOrErrno(retryOnInterrupt: retryOnInterrupt) {
+            #if os(Windows)
+            system_ioctl(CInt(self.rawValue), T.id.rawValue, request.intValue)
+            #else
             system_ioctl(self.rawValue, T.id.rawValue, request.intValue)
+            #endif
         }
     }
     
@@ -59,7 +67,11 @@ extension SocketDescriptor {
     ) -> Result<(), Errno> {
         nothingOrErrno(retryOnInterrupt: retryOnInterrupt) {
             request.withUnsafeMutablePointer { pointer in
+                #if os(Windows)
+                system_ioctl(CInt(self.rawValue), T.id.rawValue, pointer)
+                #else
                 system_ioctl(self.rawValue, T.id.rawValue, pointer)
+                #endif
             }
         }
     }

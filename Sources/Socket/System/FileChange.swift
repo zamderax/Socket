@@ -1,4 +1,7 @@
 import SystemPackage
+#if os(Windows)
+import WinSDK
+#endif
 
 public extension SocketDescriptor {
     
@@ -10,7 +13,7 @@ public extension SocketDescriptor {
     ) throws(Errno) -> FileDescriptor {
         let fileDescriptor = try _change(
             closeOnExec ? .duplicateCloseOnExec : .duplicate,
-            self.rawValue,
+            CInt(self.rawValue),
             retryOnInterrupt: retryOnInterrupt
         ).get()
         return FileDescriptor(rawValue: fileDescriptor)
@@ -67,9 +70,14 @@ public extension SocketDescriptor {
         _ operation: FileChangeID,
         retryOnInterrupt: Bool
     ) -> Result<CInt, Errno> {
+        #if os(Windows)
+        // fcntl is not available on Windows for sockets
+        return .failure(Errno(rawValue: CInt(WSAEOPNOTSUPP)))
+        #else
         valueOrErrno(retryOnInterrupt: retryOnInterrupt) {
-            system_fcntl(self.rawValue, operation.rawValue)
+            system_fcntl(Int32(self.rawValue), operation.rawValue)
         }
+        #endif
     }
     
     @usableFromInline
@@ -78,9 +86,14 @@ public extension SocketDescriptor {
         _ value: CInt,
         retryOnInterrupt: Bool
     ) -> Result<CInt, Errno> {
+        #if os(Windows)
+        // fcntl is not available on Windows for sockets
+        return .failure(Errno(rawValue: CInt(WSAEOPNOTSUPP)))
+        #else
         valueOrErrno(retryOnInterrupt: retryOnInterrupt) {
-            system_fcntl(self.rawValue, operation.rawValue, value)
+            system_fcntl(Int32(self.rawValue), operation.rawValue, value)
         }
+        #endif
     }
     
     @usableFromInline
@@ -89,9 +102,14 @@ public extension SocketDescriptor {
         _ pointer: UnsafeMutableRawPointer,
         retryOnInterrupt: Bool
     ) -> Result<CInt, Errno> {
+        #if os(Windows)
+        // fcntl is not available on Windows for sockets
+        return .failure(Errno(rawValue: CInt(WSAEOPNOTSUPP)))
+        #else
         valueOrErrno(retryOnInterrupt: retryOnInterrupt) {
-            system_fcntl(self.rawValue, operation.rawValue, pointer)
+            system_fcntl(Int32(self.rawValue), operation.rawValue, pointer)
         }
+        #endif
     }
 }
 

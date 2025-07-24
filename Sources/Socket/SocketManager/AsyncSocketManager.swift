@@ -6,6 +6,9 @@
 //
 
 import Foundation
+#if os(Windows)
+import WinSDK
+#endif
 
 public struct AsyncSocketConfiguration: Sendable {
     
@@ -32,7 +35,7 @@ public struct AsyncSocketConfiguration: Sendable {
 extension AsyncSocketConfiguration: SocketManagerConfiguration {
     
     public static nonisolated var manager: some SocketManager {
-        AsyncSocketManager.shared
+        return AsyncSocketManager.shared
     }
     
     public func configureManager() {
@@ -65,6 +68,20 @@ internal actor AsyncSocketManager: SocketManager {
         }
         log("Add socket \(fileDescriptor)")
         // make sure its non blocking
+        #if os(Windows)
+        // On Windows, use ioctlsocket to set non-blocking mode
+        do {
+            var nonBlocking: CUnsignedLong = 1
+            let result = ioctlsocket(fileDescriptor.rawValue, FIONBIO, &nonBlocking)
+            if result != 0 {
+                throw Errno(rawValue: WSAGetLastError())
+            }
+        }
+        catch {
+            log("Unable to set non blocking. \(error)")
+            assertionFailure("Unable to set non blocking. \(error)")
+        }
+        #else
         do {
             var status = try fileDescriptor.getStatus()
             if status.contains(.nonBlocking) == false {
@@ -76,6 +93,7 @@ internal actor AsyncSocketManager: SocketManager {
             log("Unable to set non blocking. \(error)")
             assertionFailure("Unable to set non blocking. \(error)")
         }
+        #endif
         // append socket with events continuation
         let eventStream = Socket.Event.Stream(bufferingPolicy: .bufferingNewest(1)) { continuation in
             state.sockets[fileDescriptor] = SocketState(

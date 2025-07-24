@@ -51,7 +51,7 @@ extension SocketDescriptor {
     ) -> Result<SocketDescriptor, Errno> {
         valueOrErrno(retryOnInterrupt: retryOnInterrupt) {
             system_socket(family.rawValue, type, protocolID)
-        }.map({ SocketDescriptor(rawValue: $0) })
+        }.map({ SocketDescriptor(cValue: $0) })
     }
     
     /// Creates an endpoint for communication and returns a descriptor.
@@ -150,7 +150,7 @@ extension SocketDescriptor {
     ) -> Result<(), Errno> {
         nothingOrErrno(retryOnInterrupt: retryOnInterrupt) {
             address.withUnsafePointer { (addressPointer, length) in
-                system_bind(rawValue, addressPointer, length)
+                system_bind(cValue, addressPointer, length)
             }
         }
     }
@@ -179,7 +179,7 @@ extension SocketDescriptor {
     ) -> Result<(), Errno> {
         nothingOrErrno(retryOnInterrupt: retryOnInterrupt) {
             option.withUnsafeBytes { bufferPointer in
-                system_setsockopt(self.rawValue, Option.ID.optionLevel.rawValue, Option.id.rawValue, bufferPointer.baseAddress!, UInt32(bufferPointer.count))
+                system_setsockopt(self.cValue, Option.ID.optionLevel.rawValue, Option.id.rawValue, bufferPointer.baseAddress!, UInt32(bufferPointer.count))
             }
         }
     }
@@ -209,7 +209,7 @@ extension SocketDescriptor {
         do {
             let value = try Option.withUnsafeBytes { bufferPointer throws(Errno) -> () in
                 var length = UInt32(bufferPointer.count)
-                guard system_getsockopt(self.rawValue, Option.ID.optionLevel.rawValue, Option.id.rawValue, bufferPointer.baseAddress!, &length) != -1 else {
+                guard system_getsockopt(self.cValue, Option.ID.optionLevel.rawValue, Option.id.rawValue, bufferPointer.baseAddress!, &length) != -1 else {
                     throw Errno.current
                 }
             }
@@ -271,7 +271,7 @@ extension SocketDescriptor {
       retryOnInterrupt: Bool
     ) -> Result<Int, Errno> {
       valueOrErrno(retryOnInterrupt: retryOnInterrupt) {
-        system_send(self.rawValue, buffer.baseAddress!, buffer.count, flags.rawValue)
+        system_send(self.cValue, buffer.baseAddress!, buffer.count, flags.rawValue)
       }
     }
     
@@ -332,7 +332,7 @@ extension SocketDescriptor {
     ) -> Result<Int, Errno> {
         valueOrErrno(retryOnInterrupt: retryOnInterrupt) {
             address.withUnsafePointer { (addressPointer, addressLength) in
-                system_sendto(self.rawValue, data.baseAddress!, data.count, flags.rawValue, addressPointer, addressLength)
+                system_sendto(self.cValue, data.baseAddress!, data.count, flags.rawValue, addressPointer, addressLength)
             }
         }
     }
@@ -367,7 +367,7 @@ extension SocketDescriptor {
       retryOnInterrupt: Bool
     ) -> Result<Int, Errno> {
       valueOrErrno(retryOnInterrupt: retryOnInterrupt) {
-        system_recv(self.rawValue, buffer.baseAddress, buffer.count, flags.rawValue)
+        system_recv(self.cValue, buffer.baseAddress, buffer.count, flags.rawValue)
       }
     }
     
@@ -407,7 +407,7 @@ extension SocketDescriptor {
       let address = Address.withUnsafePointer { addressPointer, addressLength in
         var length = addressLength
         result = valueOrErrno(retryOnInterrupt: retryOnInterrupt) {
-          system_recvfrom(self.rawValue, buffer.baseAddress, buffer.count, flags.rawValue, addressPointer, &length)
+          system_recvfrom(self.cValue, buffer.baseAddress, buffer.count, flags.rawValue, addressPointer, &length)
         }
       }
       return result.map { ($0, address) }
@@ -439,7 +439,7 @@ extension SocketDescriptor {
         retryOnInterrupt: Bool
     ) -> Result<(), Errno> {
         nothingOrErrno(retryOnInterrupt: retryOnInterrupt) {
-            system_listen(self.rawValue, backlog)
+            system_listen(self.cValue, backlog)
         }
     }
     
@@ -467,14 +467,14 @@ extension SocketDescriptor {
         _ address: Address.Type,
         retryOnInterrupt: Bool
     ) -> Result<(SocketDescriptor, Address), Errno> {
-        var result: Result<CInt, Errno> = .success(0)
+        var result: Result<CInterop.SocketDescriptor, Errno> = .success(0)
         let address = Address.withUnsafePointer { socketPointer, socketLength in
             var length = socketLength
             result = valueOrErrno(retryOnInterrupt: retryOnInterrupt) {
-                system_accept(self.rawValue, socketPointer, &length)
+                system_accept(self.cValue, socketPointer, &length)
             }
         }
-        return result.map { (SocketDescriptor(rawValue: $0), address) }
+        return result.map { (SocketDescriptor(cValue: $0), address) }
     }
     
     /// Accept a connection on a socket.
@@ -499,9 +499,10 @@ extension SocketDescriptor {
         retryOnInterrupt: Bool
     ) -> Result<SocketDescriptor, Errno> {
         var length: UInt32 = 0
-        return valueOrErrno(retryOnInterrupt: retryOnInterrupt) {
-            system_accept(self.rawValue, nil, &length)
-        }.map(SocketDescriptor.init(rawValue:))
+        let result: Result<CInterop.SocketDescriptor, Errno> = valueOrErrno(retryOnInterrupt: retryOnInterrupt) {
+            system_accept(self.cValue, nil, &length)
+        }
+        return result.map(SocketDescriptor.init(cValue:))
     }
     
     /// Initiate a connection on a socket.
@@ -531,7 +532,7 @@ extension SocketDescriptor {
     ) -> Result<(), Errno> {
         nothingOrErrno(retryOnInterrupt: retryOnInterrupt) {
             address.withUnsafePointer { (addressPointer, addressLength) in
-                system_connect(self.rawValue, addressPointer, addressLength)
+                system_connect(self.cValue, addressPointer, addressLength)
             }
         }
     }
@@ -548,7 +549,7 @@ extension SocketDescriptor {
 
     @usableFromInline
     internal func _close() -> Result<(), Errno> {
-      nothingOrErrno(retryOnInterrupt: false) { system_close(self.rawValue) }
+      nothingOrErrno(retryOnInterrupt: false) { system_close(self.cValue) }
     }
     
     
@@ -585,7 +586,7 @@ extension SocketDescriptor {
       retryOnInterrupt: Bool
     ) -> Result<Int, Errno> {
       valueOrErrno(retryOnInterrupt: retryOnInterrupt) {
-        system_read(self.rawValue, buffer.baseAddress, buffer.count)
+        system_read(self.cValue, buffer.baseAddress, buffer.count)
       }
     }
     
@@ -619,7 +620,7 @@ extension SocketDescriptor {
       retryOnInterrupt: Bool
     ) -> Result<Int, Errno> {
       valueOrErrno(retryOnInterrupt: retryOnInterrupt) {
-        system_write(self.rawValue, buffer.baseAddress, buffer.count)
+        system_write(self.cValue, buffer.baseAddress, buffer.count)
       }
     }
     
@@ -640,7 +641,7 @@ extension SocketDescriptor {
         let address = Address.withUnsafePointer { socketPointer, socketLength in
             var length = socketLength
             result = valueOrErrno(retryOnInterrupt: retryOnInterrupt) {
-                system_getsockname(self.rawValue, socketPointer, &length)
+                system_getsockname(self.cValue, socketPointer, &length)
             }
         }
         return result.map { _ in address }
@@ -663,7 +664,7 @@ extension SocketDescriptor {
         let address = Address.withUnsafePointer { socketPointer, socketLength in
             var length = socketLength
             result = valueOrErrno(retryOnInterrupt: retryOnInterrupt) {
-                system_getpeername(self.rawValue, socketPointer, &length)
+                system_getpeername(self.cValue, socketPointer, &length)
             }
         }
         return result.map { _ in address }
