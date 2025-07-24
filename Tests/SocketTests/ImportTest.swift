@@ -9,6 +9,6 @@ struct ImportTest {
         // Check that we can access Socket types
         let _ = SocketDescriptor.invalid
         // ImportTest: SocketDescriptor.invalid accessed
-        #expect(true)
+        #expect(Bool(true))
     }
 }

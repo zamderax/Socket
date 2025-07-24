@@ -153,19 +153,6 @@ internal func system_write(
   #endif
 }
 
-// write (for regular file descriptors)
-internal func system_write(
-  _ fd: Int32, _ buf: UnsafeRawPointer!, _ nbyte: Int
-) -> Int {
-#if ENABLE_MOCKING
-  if mockingEnabled { return _mockInt(fd, buf, nbyte) }
-#endif
-  #if os(Windows)
-  return Int(_write(fd, buf, UInt32(nbyte)))
-  #else
-  return write(fd, buf, nbyte)
-  #endif
-}
 
 // read (for sockets)
 internal func system_read(
@@ -181,19 +168,6 @@ internal func system_read(
   #endif
 }
 
-// read (for regular file descriptors)
-internal func system_read(
-  _ fd: Int32, _ buf: UnsafeMutableRawPointer!, _ nbyte: Int
-) -> Int {
-#if ENABLE_MOCKING
-  if mockingEnabled { return _mockInt(fd, buf, nbyte) }
-#endif
-  #if os(Windows)
-  return Int(_read(fd, buf, UInt32(nbyte)))
-  #else
-  return read(fd, buf, nbyte)
-  #endif
-}
 
 internal func system_inet_pton(
     _ family: Int32,

@@ -16,6 +16,6 @@ struct SyncSocketTest {
         try descriptor.close()
         // SyncSocketTest: Socket closed
         
-        #expect(true)
+        #expect(Bool(true))
     }
 }

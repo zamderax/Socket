@@ -8,10 +8,10 @@ struct ConfigTest {
         // ConfigTest: Accessing Socket.configuration
         
         // Try to access the static configuration
-        let config = Socket.configuration
+        _ = Socket.configuration
         // ConfigTest: Configuration accessed successfully
         // ConfigTest: Monitor interval
         
-        #expect(true)
+        #expect(Bool(true))
     }
 }

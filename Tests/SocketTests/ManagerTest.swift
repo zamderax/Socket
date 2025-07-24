@@ -9,9 +9,9 @@ struct ManagerTest {
         // ManagerTest: Accessing AsyncSocketManager.shared
         
         // Try to access the shared manager directly
-        let manager = await AsyncSocketManager.shared
+        _ = AsyncSocketManager.shared
         // ManagerTest: Manager accessed successfully
         
-        #expect(true)
+        #expect(Bool(true))
     }
 }

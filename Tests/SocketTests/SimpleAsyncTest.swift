@@ -46,7 +46,7 @@ func testSimpleAsyncSocket() async throws {
     // Send data from client to server
     let testData = Data("Hello from client".utf8)
     // Client sending data...
-    let sent = try await client.write(testData)
+    _ = try await client.write(testData)
     // Client sent bytes
     
     // Receive data on server

@@ -21,13 +21,13 @@ func testBasicWindowsSocket() async throws {
     try socket.fileDescriptor.bind(address)
     
     // Get the actual bound address
-    let boundAddress = try socket.fileDescriptor.address(IPv4SocketAddress.self)
+    _ = try socket.fileDescriptor.address(IPv4SocketAddress.self)
     // Bound to address
     
     // Close the socket
     await socket.close()
     // Socket closed successfully
     
-    #expect(true)
+    #expect(Bool(true))
 }
 
