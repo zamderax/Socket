@@ -185,18 +185,23 @@ extension WindowsSocketConfiguration: SocketManagerConfiguration {
     }
 }
 
-/// Convenience extension to use Windows IOCP configuration
+/// Convenience extension to configure Windows IOCP logging
 @available(Windows 10.0.22000, *)
 public extension Socket {
     
-    /// Configure Socket to use Windows IOCP
+    /// Configure debug logging for Windows IOCP operations
+    ///
+    /// Note: IOCP is automatically used on Windows 11+. This method only
+    /// configures debug logging to help diagnose IOCP-related issues.
     ///
     /// Example:
     /// ```swift
-    /// Socket.useWindowsIOCP()
+    /// Socket.configureWindowsLogging { message in
+    ///     print("[IOCP] \(message)")
+    /// }
     /// let socket = try await Socket(.tcp4)
     /// ```
-    static func useWindowsIOCP(
+    static func configureWindowsLogging(
         log: (@Sendable (String) -> ())? = nil,
         workerThreadCount: Int = 0
     ) {

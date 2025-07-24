@@ -1,5 +1,10 @@
 # Socket
 
+![macOS](https://img.shields.io/badge/macOS-10.15+-blue.svg)
+![iOS](https://img.shields.io/badge/iOS-13+-blue.svg)
+![Linux](https://img.shields.io/badge/Linux-Compatible-brightgreen.svg)
+![Windows](https://img.shields.io/badge/Windows-11+-blue.svg)
+
 A modern Swift library for working with POSIX sockets using async/await.
 
 ## Overview
@@ -9,11 +14,11 @@ Socket is a low-level networking library that provides a Swift-native interface 
 ### Key Features
 
 - ✅ **Pure Swift Concurrency** - Built exclusively with async/await
-- ✅ **Cross-Platform** - Supports macOS, iOS, tvOS, watchOS, and Linux
+- ✅ **Cross-Platform** - Supports macOS, iOS, tvOS, watchOS, Linux, and Windows 11+
 - ✅ **Multiple Protocols** - TCP, UDP, Unix domain sockets, and raw sockets
 - ✅ **IPv4 & IPv6** - Full support for both IP versions
 - ✅ **Type-Safe** - Leverages Swift's type system for socket options and addresses
-- ✅ **High Performance** - Minimal overhead with value types and efficient polling
+- ✅ **High Performance** - Minimal overhead with value types and efficient polling (IOCP on Windows)
 - ✅ **Event Streams** - Monitor socket events with AsyncStream
 
 ## Installation
@@ -32,7 +37,8 @@ let package = Package(
         .macOS(.v10_15),
         .iOS(.v13),
         .tvOS(.v13),
-        .watchOS(.v6)
+        .watchOS(.v6),
+        .windows(.v10_0_17763) // Windows 10 1809 minimum for Swift
     ],
     dependencies: [
         .package(url: "https://github.com/PureSwift/Socket.git", from: "0.5.0")
@@ -222,6 +228,30 @@ let linkLocal = IPv6SocketAddress(
 )
 ```
 
+## Platform-Specific Features
+
+### Windows Support
+
+Socket provides native Windows support with high-performance I/O Completion Ports (IOCP) on Windows 11 and later. The library automatically uses IOCP for async operations when running on Windows 11+.
+
+**Note:** Windows 10 and earlier versions are not supported. The library requires Windows 11 (version 10.0.22000) or later.
+
+```swift
+import Socket
+
+// On Windows 11+, Socket automatically uses IOCP for optimal performance
+let socket = try await Socket(IPv4Protocol.tcp)
+
+// Optionally enable debug logging for IOCP operations
+#if os(Windows)
+Socket.configureWindowsLogging { message in
+    print("[IOCP] \(message)")
+}
+#endif
+```
+
+All standard Socket APIs work identically on Windows - no special code changes are required.
+
 ## Advanced Usage
 
 ### Non-blocking Accept with Timeout
@@ -309,7 +339,12 @@ do {
 ## Requirements
 
 - Swift 5.7+
-- macOS 10.15+, iOS 13+, tvOS 13+, watchOS 6+, or Linux
+- **macOS** 10.15+
+- **iOS** 13+
+- **tvOS** 13+
+- **watchOS** 6+
+- **Linux** with Swift 5.7+
+- **Windows** 11+ (version 10.0.22000 or later)
 
 ## Contributing
 
